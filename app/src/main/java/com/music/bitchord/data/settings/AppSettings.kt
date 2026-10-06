@@ -591,6 +591,20 @@ object AppSettings {
     val smbUsername = MutableStateFlow("")
     val smbPassword = MutableStateFlow("")
 
+    // ── YouTube proxy ─────────────────────────────────────────────────────
+
+    /**
+     * An HTTP proxy for YouTube's traffic only — see
+     * [NetworkProxy][com.music.bitchord.data.NetworkProxy]. Stored like the
+     * WebDAV settings: host, port and username in plain prefs, the password in
+     * [AuthStore]. Off, or a blank host, means connecting directly.
+     */
+    val proxyEnabled = MutableStateFlow(false)
+    val proxyHost = MutableStateFlow("")
+    val proxyPort = MutableStateFlow(DEFAULT_PROXY_PORT)
+    val proxyUsername = MutableStateFlow("")
+    val proxyPassword = MutableStateFlow("")
+
     /**
      * Browse ids of the playlists pinned to the top of the Library tab, in the
      * order they were pinned.
@@ -909,6 +923,12 @@ object AppSettings {
             webdavUsername.value,
             webdavPassword.value,
         )
+        proxyEnabled.value = prefs.getBoolean(KEY_PROXY_ENABLED, false)
+        proxyHost.value = prefs.getString(KEY_PROXY_HOST, "").orEmpty()
+        proxyPort.value = prefs.getInt(KEY_PROXY_PORT, DEFAULT_PROXY_PORT)
+        proxyUsername.value = prefs.getString(KEY_PROXY_USERNAME, "").orEmpty()
+        proxyPassword.value = authStore.proxyPassword.orEmpty()
+        publishProxy()
         pinnedPlaylists.value = readPinnedPlaylists()
         discordToken.value = authStore.discordToken.orEmpty()
         discordUsername.value = prefs.getString(KEY_DISCORD_USERNAME, "").orEmpty()
@@ -1697,6 +1717,63 @@ object AppSettings {
         setWebDavPassword("")
     }
 
+    /** Saves the whole proxy form at once; an empty [password] forgets it. */
+    fun setYouTubeProxy(enabled: Boolean, host: String, port: Int, username: String, password: String) {
+        proxyEnabled.value = enabled
+        proxyHost.value = host.trim()
+        proxyPort.value = port
+        proxyUsername.value = username.trim()
+        proxyPassword.value = password
+        prefs.edit()
+            .putBoolean(KEY_PROXY_ENABLED, enabled)
+            .putString(KEY_PROXY_HOST, proxyHost.value)
+            .putInt(KEY_PROXY_PORT, port)
+            .putString(KEY_PROXY_USERNAME, proxyUsername.value)
+            .apply()
+        authStore.proxyPassword = password.ifEmpty { null }
+        publishProxy()
+    }
+
+    private fun publishProxy() {
+        com.music.bitchord.data.NetworkProxy.update(
+            proxyConfig(proxyEnabled.value, proxyHost.value, proxyPort.value, proxyUsername.value, proxyPassword.value),
+        )
+    }
+
+    /**
+     * Publishes the saved proxy before [init] has run.
+     *
+     * Startup begins talking to YouTube (the session scope, InnerTubeX's
+     * player config) before the settings are read in full, and a request
+     * that goes out direct where the proxy is needed fails, and leaves a
+     * pooled connection on the direct route behind it.
+     */
+    fun publishProxyEarly(context: Context, authStore: AuthStore) {
+        val p = context.getSharedPreferences("bitchord_settings", Context.MODE_PRIVATE)
+        com.music.bitchord.data.NetworkProxy.update(
+            proxyConfig(
+                p.getBoolean(KEY_PROXY_ENABLED, false),
+                p.getString(KEY_PROXY_HOST, "").orEmpty(),
+                p.getInt(KEY_PROXY_PORT, DEFAULT_PROXY_PORT),
+                p.getString(KEY_PROXY_USERNAME, "").orEmpty(),
+                authStore.proxyPassword.orEmpty(),
+            ),
+        )
+    }
+
+    private fun proxyConfig(
+        enabled: Boolean,
+        host: String,
+        port: Int,
+        username: String,
+        password: String,
+    ): com.music.bitchord.data.NetworkProxy.Config? =
+        if (enabled && host.isNotBlank() && port in 1..65535) {
+            com.music.bitchord.data.NetworkProxy.Config(host.trim(), port, username, password)
+        } else {
+            null
+        }
+
     fun setSmbHost(value: String) {
         val normalized = value.trim()
         smbHost.value = normalized
@@ -1989,6 +2066,11 @@ object AppSettings {
     private const val KEY_LOCAL_MUSIC_FOLDER_URI = "local_music_folder_uri"
     private const val KEY_WEBDAV_URL = "webdav_url"
     private const val KEY_WEBDAV_USERNAME = "webdav_username"
+    private const val KEY_PROXY_ENABLED = "youtube_proxy_enabled"
+    private const val KEY_PROXY_HOST = "youtube_proxy_host"
+    private const val KEY_PROXY_PORT = "youtube_proxy_port"
+    private const val KEY_PROXY_USERNAME = "youtube_proxy_username"
+    const val DEFAULT_PROXY_PORT = 8080
     private const val KEY_SMB_HOST = "smb_host"
     private const val KEY_SMB_SHARE = "smb_share"
     private const val KEY_SMB_BASE_PATH = "smb_base_path"

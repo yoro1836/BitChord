@@ -136,6 +136,9 @@ object Http {
         .retryOnConnectionFailure(true)
         .dispatcher(Dispatcher().apply { maxRequestsPerHost = 16 })
         .connectionPool(ConnectionPool(16, 5, TimeUnit.MINUTES))
+        // YouTube's hosts through the user's proxy when one is set; see NetworkProxy.
+        .proxySelector(NetworkProxy.selector)
+        .proxyAuthenticator(NetworkProxy.authenticator)
         .addInterceptor(webDavInterceptor)
         .apply { if (USAGE_LOGGING_ENABLED) addNetworkInterceptor(usageInterceptor) }
         .build()

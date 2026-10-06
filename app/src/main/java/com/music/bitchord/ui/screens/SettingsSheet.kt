@@ -70,6 +70,7 @@ import androidx.compose.material.icons.rounded.SurroundSound
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.VolumeOff
 import androidx.compose.material.icons.rounded.VolumeUp
+import androidx.compose.material.icons.rounded.VpnLock
 import androidx.compose.material.icons.rounded.Waves
 import androidx.compose.material.icons.rounded.Wifi
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -117,8 +118,11 @@ import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withLink
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -340,6 +344,10 @@ fun SettingsScreen(
         }
     }
     var showListenBrainzTokenDialog by remember { mutableStateOf(false) }
+    var showProxyDialog by remember { mutableStateOf(false) }
+    val proxyEnabled by AppSettings.proxyEnabled.collectAsStateWithLifecycle()
+    val proxyHost by AppSettings.proxyHost.collectAsStateWithLifecycle()
+    val proxyPort by AppSettings.proxyPort.collectAsStateWithLifecycle()
     var showLastfmLoginDialog by remember { mutableStateOf(false) }
     val scrobbleScope = rememberCoroutineScope()
 
@@ -1096,6 +1104,22 @@ fun SettingsScreen(
             }
         }
 
+        SearchableSettingsGroup(search, header = stringResource(R.string.network)) {
+            val proxyTitle = stringResource(R.string.youtube_proxy)
+            row(proxyTitle, "proxy", "http", "network", "region", "vpn") {
+                SettingsRow(
+                    icon = Icons.Rounded.VpnLock,
+                    title = proxyTitle,
+                    subtitle = if (proxyEnabled && proxyHost.isNotBlank()) {
+                        stringResource(R.string.youtube_proxy_on, proxyHost, proxyPort)
+                    } else {
+                        stringResource(R.string.youtube_proxy_off)
+                    },
+                    onClick = { showProxyDialog = true },
+                )
+            }
+        }
+
         val cacheUnlimited = cacheLimitBytes == AppSettings.UNLIMITED_CACHE_LIMIT_BYTES
         // The slider's last stop, one step past the largest fixed size, is
         // "Unlimited" — see [AppSettings.setAudioCacheLimitBytes].
@@ -1485,6 +1509,10 @@ fun SettingsScreen(
         }
     }
 
+    if (showProxyDialog) {
+        YouTubeProxyDialog(onDismiss = { showProxyDialog = false })
+    }
+
     // Everything in the Cached songs folder goes with it, so say so first.
     if (confirmClearSongCache) {
         AlertDialog(
@@ -1785,6 +1813,121 @@ private fun formatCacheSize(mb: Int): String {
 }
 
 /** Who you're signed in as, straight from YouTube Music's account menu. */
+/**
+ * The YouTube proxy form. A draft, seeded once when the dialog opens and only
+ * written back on Save, so a half-typed host never reaches the network layer.
+ */
+@Composable
+private fun YouTubeProxyDialog(onDismiss: () -> Unit) {
+    var enabled by remember { mutableStateOf(AppSettings.proxyEnabled.value) }
+    var host by remember { mutableStateOf(AppSettings.proxyHost.value) }
+    var port by remember { mutableStateOf(AppSettings.proxyPort.value.toString()) }
+    var username by remember { mutableStateOf(AppSettings.proxyUsername.value) }
+    var password by remember { mutableStateOf(AppSettings.proxyPassword.value) }
+    var invalid by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.youtube_proxy)) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Text(
+                    text = stringResource(R.string.youtube_proxy_description),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { enabled = !enabled },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(R.string.youtube_proxy_use),
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Switch(checked = enabled, onCheckedChange = { enabled = it })
+                }
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = host,
+                    onValueChange = { host = it; invalid = false },
+                    label = { Text(stringResource(R.string.proxy_host)) },
+                    placeholder = { Text("192.168.0.10") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = port,
+                    onValueChange = { value -> port = value.filter(Char::isDigit).take(5); invalid = false },
+                    label = { Text(stringResource(R.string.proxy_port)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = username,
+                    onValueChange = { username = it },
+                    label = { Text(stringResource(R.string.proxy_username_optional)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text(stringResource(R.string.proxy_password_optional)) },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (invalid) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = stringResource(R.string.proxy_invalid),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                // Pasted as a URL is still a host: drop a scheme and any path.
+                val cleanHost = host.trim()
+                    .substringAfter("://")
+                    .substringBefore('/')
+                val portNumber = port.toIntOrNull()
+                if (enabled && (cleanHost.isBlank() || portNumber == null || portNumber !in 1..65535)) {
+                    invalid = true
+                } else {
+                    AppSettings.setYouTubeProxy(
+                        enabled = enabled,
+                        host = cleanHost,
+                        port = portNumber ?: AppSettings.DEFAULT_PROXY_PORT,
+                        username = username,
+                        password = password,
+                    )
+                    onDismiss()
+                }
+            }) {
+                Text(stringResource(R.string.save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
+            }
+        },
+    )
+}
+
 @Composable
 internal fun AccountCard(
     signedIn: Boolean,

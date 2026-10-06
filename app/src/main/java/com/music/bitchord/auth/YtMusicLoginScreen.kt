@@ -2,6 +2,7 @@ package com.music.bitchord.auth
 
 import android.annotation.SuppressLint
 import android.webkit.CookieManager
+import android.webkit.HttpAuthHandler
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,6 +16,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import com.music.bitchord.data.DebugLog as Log
+import com.music.bitchord.data.WebViewProxy
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -97,6 +99,19 @@ fun YtMusicLoginScreen(
                 settings.domStorageEnabled = true
 
                 webViewClient = object : WebViewClient() {
+                    private var proxyAuthAttempts = 0
+
+                    override fun onReceivedHttpAuthRequest(
+                        view: WebView?,
+                        handler: HttpAuthHandler,
+                        host: String?,
+                        realm: String?,
+                    ) {
+                        if (!WebViewProxy.handleAuthRequest(handler, host, ++proxyAuthAttempts)) {
+                            super.onReceivedHttpAuthRequest(view, handler, host, realm)
+                        }
+                    }
+
                     override fun onPageFinished(view: WebView?, url: String?) {
                         // Reaching the Music origin only enables confirmation.
                         // A multi-channel login can still be waiting for the
@@ -108,7 +123,11 @@ fun YtMusicLoginScreen(
                 }
 
                 webView = this
-                loadUrl(if (mode == WebSessionMode.SIGN_IN) LOGIN_URL else "$MUSIC_ORIGIN/")
+                // After the YouTube proxy, if one is set, has reached WebView:
+                // a page loaded before that goes out directly.
+                WebViewProxy.apply(context) {
+                    loadUrl(if (mode == WebSessionMode.SIGN_IN) LOGIN_URL else "$MUSIC_ORIGIN/")
+                }
             }
         },
     )

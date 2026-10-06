@@ -314,6 +314,9 @@ dependencies {
     // media3-decoder, which media3-exoplayer already brings.
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-guava:1.9.0")
 
+    // ---- WebView proxy override, so sign-in follows the YouTube proxy (see WebViewProxy) ----
+    implementation("androidx.webkit:webkit:1.12.1")
+
     // ---- Images: Coil 3 + Palette (dominant colors for the mesh gradient) ----
     implementation("io.coil-kt.coil3:coil-compose:3.0.4")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.0.4")

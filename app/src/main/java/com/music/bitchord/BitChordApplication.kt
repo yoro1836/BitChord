@@ -9,9 +9,11 @@ import coil3.SingletonImageLoader
 import coil3.disk.DiskCache
 import coil3.disk.directory
 import coil3.memory.MemoryCache
+import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.crossfade
 import com.music.bitchord.auth.AuthStore
 import com.music.bitchord.data.DebugLog
+import com.music.bitchord.data.Http
 import com.music.bitchord.data.lyrics.LyricsTranslation
 import androidx.appcompat.app.AppCompatDelegate
 import com.music.bitchord.ui.player.AndroidPlayerHost
@@ -66,6 +68,8 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
         // PlaybackService shares this process, so seeding the cookie here means
         // stream resolution is authenticated from the first play onwards.
         authStore = AuthStore(this)
+        // Before anything below can reach YouTube. See publishProxyEarly.
+        AppSettings.publishProxyEarly(this, authStore)
         // Opened off the main thread, alongside everything below: none of these
         // reads a setting or the session, and between them they are the slowest
         // opens at startup — SourceRegistry's encrypted store most of all.
@@ -169,9 +173,13 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
         ImageLoader.Builder(context)
             // Covers on the WebDAV server need the credential or every one
             // of them 401s — which reads as "this track has no artwork".
-            // Coil's own transport never sees Http.client's interceptor, so
-            // the header is attached per request instead. See WebDavCoilAuth.
+            // The header is attached per request. See WebDavCoilAuth. (Coil
+            // now fetches through Http.client too, whose interceptor leaves a
+            // request that already carries it alone.)
             .components {
+                // Through the app's one client, so cover art on YouTube's CDN
+                // follows the YouTube proxy like everything else. See NetworkProxy.
+                add(OkHttpNetworkFetcherFactory(callFactory = { Http.client }))
                 add(WebDavCoilAuth())
                 // Covers filed on the SMB share; anything else falls
                 // through to Coil's own fetchers. See SmbCoverFetcher.
