@@ -7,6 +7,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -14,6 +15,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.music.bitchord.data.DebugLog as Log
 import com.music.bitchord.data.WebViewProxy
@@ -78,6 +80,18 @@ fun YtMusicLoginScreen(
     val currentOnUnavailable by rememberUpdatedState(onCaptureUnavailable)
     val currentOnPageReady by rememberUpdatedState(onPageReady)
 
+    // The proxy override is process-wide, so it must not outlive this screen:
+    // see WebViewProxy. `released` also stops a load that was still waiting on
+    // the override from starting after the screen has gone.
+    val appContext = LocalContext.current.applicationContext
+    var released by remember { mutableStateOf(false) }
+    DisposableEffect(Unit) {
+        onDispose {
+            released = true
+            WebViewProxy.release(appContext)
+        }
+    }
+
     LaunchedEffect(captureRequest) {
         if (captureRequest == 0) return@LaunchedEffect
         val view = webView
@@ -126,7 +140,7 @@ fun YtMusicLoginScreen(
                 // After the YouTube proxy, if one is set, has reached WebView:
                 // a page loaded before that goes out directly.
                 WebViewProxy.apply(context) {
-                    loadUrl(if (mode == WebSessionMode.SIGN_IN) LOGIN_URL else "$MUSIC_ORIGIN/")
+                    if (!released) loadUrl(if (mode == WebSessionMode.SIGN_IN) LOGIN_URL else "$MUSIC_ORIGIN/")
                 }
             }
         },

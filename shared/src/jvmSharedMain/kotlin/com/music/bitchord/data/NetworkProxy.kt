@@ -8,6 +8,7 @@ import java.net.Proxy
 import java.net.ProxySelector
 import java.net.SocketAddress
 import java.net.URI
+import kotlin.concurrent.thread
 
 /**
  * An optional HTTP proxy for YouTube's own traffic, for listeners on a network
@@ -51,7 +52,16 @@ object NetworkProxy {
         // this a YouTube connection opened before the change would go on being
         // reused after it. Only idle ones can be closed; one mid-stream finishes
         // on the route it started with.
-        if (previous != config) Http.client.connectionPool.evictAll()
+        //
+        // Off the calling thread: this is reached from the settings dialog on
+        // the main thread, and closing a pooled TLS socket writes to it, which
+        // Android refuses there with NetworkOnMainThreadException — one OkHttp
+        // rethrows rather than swallows, so it took the app down.
+        if (previous != config) {
+            thread(name = "proxy-evict", isDaemon = true) {
+                runCatching { Http.client.connectionPool.evictAll() }
+            }
+        }
     }
 
     /**

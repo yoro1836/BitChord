@@ -14,8 +14,12 @@ import com.music.bitchord.data.DebugLog as Log
  *
  * Applied on demand, right before a WebView that loads YouTube is created,
  * rather than at startup: [ProxyController] loads the WebView provider, which
- * is a cost a cold start does not need to pay. The override is process-wide,
- * so it holds for every WebView after it.
+ * is a cost a cold start does not need to pay.
+ *
+ * The override is process-wide — every WebView in the app sees it, including
+ * the hidden PO-token one and the Discord and Spotify sign-ins, none of which
+ * have any business going through it. So it is held only while the screen that
+ * asked for it is up: [apply] on the way in, [release] on the way out.
  */
 object WebViewProxy {
     private const val TAG = "WebViewProxy"
@@ -50,6 +54,19 @@ object WebViewProxy {
             Log.w(TAG, "proxy override failed: ${it.message}")
             onReady()
         }
+    }
+
+    /**
+     * Takes the override off again, so WebViews opened after the one that
+     * asked for it connect as they always did. A no-op if none was applied.
+     */
+    fun release(context: Context) {
+        if (applied == null) return
+        applied = null
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE)) return
+        runCatching {
+            ProxyController.getInstance().clearProxyOverride(ContextCompat.getMainExecutor(context)) {}
+        }.onFailure { Log.w(TAG, "clearing proxy override failed: ${it.message}") }
     }
 
     private fun build(config: NetworkProxy.Config): ProxyConfig {
