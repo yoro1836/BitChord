@@ -2045,7 +2045,7 @@ private fun YouTubeProxyDialog(onDismiss: () -> Unit) {
                         style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.weight(1f),
                     )
-                    Switch(checked = enabled, onCheckedChange = { enabled = it })
+                    IosSwitch(checked = enabled, onCheckedChange = { enabled = it })
                 }
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
