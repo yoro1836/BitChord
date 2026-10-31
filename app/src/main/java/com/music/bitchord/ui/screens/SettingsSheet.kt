@@ -576,6 +576,23 @@ fun SettingsScreen(
                 }
             }
 
+            // The fork's YouTube proxy: main page only, like Audio quality.
+            SearchableSettingsGroup(search, header = stringResource(R.string.network)) {
+                val proxyTitle = stringResource(R.string.youtube_proxy)
+                row(proxyTitle, "proxy", "http", "network", "region", "vpn") {
+                    SettingsRow(
+                        icon = Icons.Rounded.VpnLock,
+                        title = proxyTitle,
+                        subtitle = if (proxyEnabled && proxyHost.isNotBlank()) {
+                            stringResource(R.string.youtube_proxy_on, proxyHost, proxyPort)
+                        } else {
+                            stringResource(R.string.youtube_proxy_off)
+                        },
+                        onClick = { showProxyDialog = true },
+                    )
+                }
+            }
+
             // The categories, each a page of its own — until there is a query,
             // when their rows answer here instead (below).
             if (!searching) {
@@ -1270,22 +1287,6 @@ fun SettingsScreen(
                         )
                     },
                     onClick = { AppSettings.setFilterNonMusicAudio(!filterNonMusicAudio) },
-                )
-            }
-        }
-
-        SearchableSettingsGroup(search, header = stringResource(R.string.network)) {
-            val proxyTitle = stringResource(R.string.youtube_proxy)
-            row(proxyTitle, "proxy", "http", "network", "region", "vpn") {
-                SettingsRow(
-                    icon = Icons.Rounded.VpnLock,
-                    title = proxyTitle,
-                    subtitle = if (proxyEnabled && proxyHost.isNotBlank()) {
-                        stringResource(R.string.youtube_proxy_on, proxyHost, proxyPort)
-                    } else {
-                        stringResource(R.string.youtube_proxy_off)
-                    },
-                    onClick = { showProxyDialog = true },
                 )
             }
         }
